@@ -1,4 +1,5 @@
 import pickle
+import os
 
 """
 Function: unpickleData
@@ -47,3 +48,12 @@ def getData(path_to_data, data_to_retrieve):
         desired_data[d] = cur_data
 
     return desired_data
+
+def countData(path_to_data):
+    count = 0
+    for path, subdirs, files in os.walk(path_to_data):
+        for data in files:
+            if (data.endswith('.png')):
+                count += 1
+
+    return count
