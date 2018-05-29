@@ -42,6 +42,28 @@ def initializeWeights(m):
         init.xavier_uniform_(m.weight.data)
 
 def eyeModel():
+    """
+    Archtitectures:
+    ex.1 
+    Start with a 42 x 50 image resolution image (each eye)
+    Use a 24 layer convolutional layer (7x7 dimension)
+    Do some Relu (intrudces nonlinearity, represented as f(x) = max(0,x)) and Max Pooling (2x2 -> reduce spatial resolution by half)
+    Use a second 24 layer convolutional layer (5x5 dimension)
+    RelUand Max Poolin
+    A third 24 layer convolutional layer (3x3 dimension)
+    RelU and Max Pooing again
+    This yields a fully connected layer
+    Obtain output layer (7 classes in example)
+
+    ex.2
+    For each eye
+    Convolutional layer (filter size 3x3 | 32 filters)
+    Convolutional layer (filter size 3x3 | 32 filters)
+    Convolutional layer (filter size 3x3 | 64 filters)
+    Flatten
+    get fully connected layer (128 neurons)
+    """
+
     m = nn.Squential(
 
     )
