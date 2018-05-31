@@ -9,7 +9,6 @@ import torchvision.transforms as T
 import numpy as np
 from preprocess import *
 import os
-import cv2
 
 """
 Class: Flatten
@@ -37,23 +36,26 @@ class Unflatten(nn.Module):
     def forward(self, x):
         return x.view(self.N, self.C, self.H, self.W)
 
+# TODO: may need to remove this
 def initializeWeights(m):
     if isinstance(m, nn.Linear) or isinstance(m, nn.ConvTranspose2d):
         init.xavier_uniform_(m.weight.data)
 
-def eyeModel():
+def eyeModel(model_num, H, W, num_classes):
     """
     Archtitectures:
-    ex.1 
-    Start with a 42 x 50 image resolution image (each eye)
-    Use a 24 layer convolutional layer (7x7 dimension)
-    Do some Relu (intrudces nonlinearity, represented as f(x) = max(0,x)) and Max Pooling (2x2 -> reduce spatial resolution by half)
-    Use a second 24 layer convolutional layer (5x5 dimension)
-    RelUand Max Poolin
-    A third 24 layer convolutional layer (3x3 dimension)
-    RelU and Max Pooing again
-    This yields a fully connected layer
-    Obtain output layer (7 classes in example)
+    ex.1
+    Convolutional layer (filter size 7x7 | 24 filters)
+    ReLU
+    MaxPool (2x2)
+    Convolutional layer (filter size 5x5 | 24 filters)
+    ReLU
+    MaxPool (2x2)
+    Convolutional layer (filter size 3x3 | 24 filters)
+    ReLU
+    MaxPool (2x2)
+    Flatten
+    Fully Connected
 
     ex.2
     For each eye
@@ -64,9 +66,30 @@ def eyeModel():
     get fully connected layer (128 neurons)
     """
 
-    m = nn.Squential(
+    m = None
 
-    )
+    if (model_num == 0): # Architecture 0
+        m = nn.Squential(
+            nn.Conv2d(3, 24, 7, stride=1, padding=3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(24, 24, 5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(24, 24, 3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            Flatten(),
+            nn.Linear(24*H*W / np.pow(2, 6), num_classes)
+        )
+    elif (model_num == 1): # Architecture 1
+        m = nn.Sequential(
+            nn.Conv2d(3, 32, 3, stride=1, padding=1),
+            nn.Conv2d(32, 32, 3, stride=1, padding=1),
+            nn.Conv2d(32, 64, 3, stride=1, padding=1),
+            Flatten(),
+            nn.Linear(64*H*W, num_classes)
+        )
 
     return m
 
@@ -106,6 +129,17 @@ def getOptimizer(m, optimType='adam', lr=1e-3, alpha=0.9, betas=(0.5, 0.999), mo
 
     return optimizer
 
+"""
+Function: checkAccuracy
+=======================
+Checks the accuracy of the model m on the validation data data_val.
+=======================
+input:
+    m: model whose accuracy we are checking
+    data_val: validation set of the data
+output:
+    None
+"""
 def checkAccuracy(m, data_val):
     num_correct = 0
     num_samples = 0
@@ -115,6 +149,12 @@ def checkAccuracy(m, data_val):
 
     with torch.no_grad():
         for x, y in data_val:
+            # Convert x to correct data structure
+            C, H, W = x.shape
+            x = torch.tensor(x.reshape(1, C, H, W))
+            x = x.to(dtype=torch.float32)
+            y = torch.tensor([y], dtype=torch.long)
+
             # Get scores
             scores = m(x)
 
@@ -128,13 +168,36 @@ def checkAccuracy(m, data_val):
         acc = float(num_correct) / num_samples
         print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
 
-def train(m, data_train, data_val, num_epochs=10, show_every=100):
+"""
+Function: train
+===============
+Trains the model m and saves it to path_to_model.
+===============
+input:
+    m: model to be trained
+    data_train: training set of the data
+    data_val: validation set of the data
+    path_to_model: directory where the model will be saved
+    num_epochs: number of epochs to run
+    show_every: number to print statistics every show_every iteration
+output:
+    None
+"""
+def train(m, data_train, data_val, path_to_model, num_epochs=10, show_every=100):
+    print("=====Training=====")
+
     iter_count = 0
-    initializeWeights(m)
+    # initializeWeights(m) TODO: may need to remove this
     optimizer = getOptimizer(m)
 
     for epoch in range(num_epochs):
         for c, (x, y) in enumerate(data_train):
+            # Convert x to correct data structure
+            C, H, W = x.shape
+            x = torch.tensor(x.reshape(1, C, H, W))
+            x = x.to(dtype=torch.float32)
+            y = torch.tensor([y], dtype=torch.long)
+
             # Put model into training mode
             m.train()
 
@@ -161,62 +224,38 @@ def train(m, data_train, data_val, num_epochs=10, show_every=100):
 
             iter_count += 1
 
+    saveData(m, path_to_model)
+
 """
-Function: setup
+Function: model
 ===============
-Sets up the data in an array format.
+Trains or tests a model defined by mode and model_num.
 ===============
 input:
-    path_to_data: path where pickled data is located
-    data_to_retrieve: the data the user wants from path_to_data in a list
-        'look_vec': the 3D gaze direction in camera space
-        'head_pose': a 3x3 matrix rotation from world space to camera space
-        'ldmks': a dict containing the following 2D and 3D landmarks
-            'ldmks_lids_2d', 'ldmks_iris_2d', 'ldmks_pupil_2d' in screen space
-            'ldmks_lids_3d', 'ldmks_iris_3d', 'ldmks_pupil_3d' in camera space
+    path_to_model: path where model is located or where it will be saved
+    mode: mode to determine if we train or test
+        'train': states we will be training
+        'test': states we will be testing
+    model_num: number that specifies the model we'll be using
+    path_to_data: path to where the array data is located
+    path_to_unique: path to where the unique_y data is located
+    setup_mode: mode to use for setup function
+        'load': states we will be loading data
+        'save': states we will be creating and saving the data
 output:
-    array_data: the data in an array format
+    None
 """
-def setup(path_to_data, data_to_retrieve):
-    N_data = countData(path_to_data)
-
-    list_data = []
-
-    for path, subdirs, files in os.walk(path_to_data):
-        for data in files:
-            if (data.endswith('.png')):
-                x = cv2.imread(path + '/' + data, cv2.IMREAD_COLOR)
-                y = getData(path + '/' + data[:-3] + 'pkl', data_to_retrieve)
-                list_data.append((x, y))
-
-    array_data = np.asarray(list_data)
-
-    return array_data
-
-"""
-Function: splitData
-===================
-Splits data into training, validation, and testing sets with a 60, 20, 20 split.
-===================
-input:
-    data: data to split
-output:
-    data_train: training set
-    data_val: validation set
-    data_test: testing set
-"""
-def splitData(data):
-    data_train, data_val, data_test = np.split(data.sample(frac=1), [int(.6*len(data)), int(.8*len(data))])
-
-    return torch.from_numpy(data_train), torch.from_numpy(data_val), torch.from_numpy(data_test)
-
-# TODO: finish this function
-def model(inputModel, data, train, test):
-    model_to_use = eyeModel if (train) else inputModel
-
+def model(path_to_model, mode, model_num, path_to_data, path_to_unique, setup_mode='load'):
+    data, y = setup(path_to_data, path_to_unique, mode=setup_mode)
+    H, W, _ = data[0][0].shape
+    data = reformulateData(data)
     data_train, data_val, data_test = splitData(data)
 
-    if (train):
-        train(model_to_use, data_train, data_val)
-    if (test):
+    num_classes = len(y)
+
+    model_to_use = eyeModel(model_num, H, W, num_classes) if (mode == 'train') else loadData(path_to_model)
+
+    if (mode == 'train'):
+        train(model_to_use, data_train, data_val, path_to_model)
+    elif (mode == 'test'):
         checkAccuracy(model_to_use, data_test)
