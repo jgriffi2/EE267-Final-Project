@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn import init
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -9,6 +10,8 @@ import torchvision.transforms as T
 import numpy as np
 from preprocess import *
 import os
+from plotter import *
+import random
 
 """
 Class: Flatten
@@ -36,15 +39,35 @@ class Unflatten(nn.Module):
     def forward(self, x):
         return x.view(self.N, self.C, self.H, self.W)
 
-# TODO: may need to remove this
+"""
+Function: initializeWeights
+===========================
+Initializes the weights of the model using the xavier uniform method.
+===========================
+input:
+    m: model
+output:
+    None
+"""
 def initializeWeights(m):
-    if isinstance(m, nn.Linear) or isinstance(m, nn.ConvTranspose2d):
+    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
         init.xavier_uniform_(m.weight.data)
 
-def eyeModel(model_num, H, W, num_classes):
+"""
+Function: eyeModel
+==================
+Constructs a model for eye tracking.
+==================
+input:
+    H: height of imgs
+    W: width of imgs
+    num_classes: number of classes to base scores off of
+output:
+    m: model created
+"""
+def eyeModel(H, W, num_classes):
     """
     Archtitectures:
-    ex.1
     Convolutional layer (filter size 7x7 | 24 filters)
     ReLU
     MaxPool (2x2)
@@ -56,40 +79,26 @@ def eyeModel(model_num, H, W, num_classes):
     MaxPool (2x2)
     Flatten
     Fully Connected
-
-    ex.2
-    For each eye
-    Convolutional layer (filter size 3x3 | 32 filters)
-    Convolutional layer (filter size 3x3 | 32 filters)
-    Convolutional layer (filter size 3x3 | 64 filters)
-    Flatten
-    get fully connected layer (128 neurons)
     """
 
-    m = None
+    m = nn.Sequential(
+        nn.Conv2d(3, 32, 3, stride=1, padding=1),
+        nn.Conv2d(32, 32, 3, stride=1, padding=1),
+        nn.Conv2d(32, 32, 3, stride=1, padding=1),
+        nn.ReLU(),
+        nn.MaxPool2d(2),
+        nn.Conv2d(32, 32, 3, stride=1, padding=1),
+        nn.Conv2d(32, 32, 3, stride=1, padding=1),
+        nn.ReLU(),
+        nn.MaxPool2d(2),
+        nn.Conv2d(32, 64, 3, stride=1, padding=1),
+        nn.ReLU(),
+        nn.MaxPool2d(2),
+        Flatten(),
+        nn.Linear(64*H*W / 64, num_classes)
+    )
 
-    if (model_num == 0): # Architecture 0
-        m = nn.Squential(
-            nn.Conv2d(3, 24, 7, stride=1, padding=3),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(24, 24, 5, stride=1, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(24, 24, 3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            Flatten(),
-            nn.Linear(24*H*W / np.pow(2, 6), num_classes)
-        )
-    elif (model_num == 1): # Architecture 1
-        m = nn.Sequential(
-            nn.Conv2d(3, 32, 3, stride=1, padding=1),
-            nn.Conv2d(32, 32, 3, stride=1, padding=1),
-            nn.Conv2d(32, 64, 3, stride=1, padding=1),
-            Flatten(),
-            nn.Linear(64*H*W, num_classes)
-        )
+    m.apply(initializeWeights)
 
     return m
 
@@ -101,7 +110,7 @@ Returns an optimizer for the type specified by optimType.
 input:
     m: model to create optimizer for
     optimType: type of optimizer
-        'adam', 'sparseadam', 'adamax', 'rmsprop', 'sgd', 'nesterovsgd'
+        'adam', 'rmsprop', 'sgd'
     lr: learning rate
     alpha: alpha value for optimizer
     betas: beta1 and beta2 values for optimizer
@@ -114,16 +123,10 @@ def getOptimizer(m, optimType='adam', lr=1e-3, alpha=0.9, betas=(0.5, 0.999), mo
 
     if (optimType == 'adam'):
         optimizer = optim.Adam(m.parameters(), lr=lr, betas=betas)
-    elif (optimType == 'sparseadam'):
-        optimizer = optim.SparseAdam(m.parameters(), lr=lr, betas=(beta1, beta2))
-    elif (optimType == 'adamax'):
-        optimizer = optim.Adamax(m.parameters(), lr=lr, betas=(beta1, beta2))
     elif (optimType == 'rmsprop'):
         optimizer = optim.RMSprop(m.parameters(), lr=lr, alpha=alpha, momentum=momentum)
     elif (optimType == 'sgd'):
         optimizer = optim.SGD(m.parameters(), lr=lr, momentum=momentum)
-    elif (optimType == 'nesterovsgd'):
-        optimizer = optim.SGD(m.parameters(), lr=lr, momentum=momentum, nesterov=True)
     else:
         print("Unsupported optimizer type")
 
@@ -168,6 +171,8 @@ def checkAccuracy(m, data_val):
         acc = float(num_correct) / num_samples
         print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
 
+    return acc
+
 """
 Function: train
 ===============
@@ -183,12 +188,16 @@ input:
 output:
     None
 """
-def train(m, data_train, data_val, path_to_model, num_epochs=10, show_every=100):
+def train(m, data_train, data_val, path_to_model, opt_params, num_epochs=10, show_every=500):
     print("=====Training=====")
 
     iter_count = 0
-    # initializeWeights(m) TODO: may need to remove this
-    optimizer = getOptimizer(m)
+    type, lr, alpha, betas, momentum = opt_params
+    optimizer = getOptimizer(m, optimType=type, lr=lr, betas=betas, momentum=momentum)
+
+    loss_array = np.zeros(data_train.shape[0] * num_epochs, dtype=np.float)
+    acc_train = np.zeros(num_epochs, dtype=np.float)
+    acc_val = np.zeros(num_epochs, dtype=np.float)
 
     for epoch in range(num_epochs):
         for c, (x, y) in enumerate(data_train):
@@ -216,6 +225,9 @@ def train(m, data_train, data_val, path_to_model, num_epochs=10, show_every=100)
             # Update parameters of the model
             optimizer.step()
 
+            # Store loss in loss_array
+            loss_array[iter_count] = loss.item()
+
             # Print the update of the loss
             if (iter_count % show_every == 0):
                 print('Iteration %d, loss = %.4f' % (iter_count, loss.item()))
@@ -224,7 +236,17 @@ def train(m, data_train, data_val, path_to_model, num_epochs=10, show_every=100)
 
             iter_count += 1
 
+        acc_train[epoch] = checkAccuracy(m, data_train)
+        acc_val[epoch] = checkAccuracy(m, data_val)
+
+    # Save model
     saveData(m, path_to_model)
+
+    # Plot the loss
+    plotLoss(loss_array, "../../Plots/" + path_to_model[12:] + ".png")
+
+    # Plot the accuracy
+    plotAccuracy(acc_train, acc_val, "../../Plots/" + path_to_model[12:] + "_accuracies.png")
 
 """
 Function: model
@@ -236,7 +258,6 @@ input:
     mode: mode to determine if we train or test
         'train': states we will be training
         'test': states we will be testing
-    model_num: number that specifies the model we'll be using
     path_to_data: path to where the array data is located
     path_to_unique: path to where the unique_y data is located
     setup_mode: mode to use for setup function
@@ -245,17 +266,42 @@ input:
 output:
     None
 """
-def model(path_to_model, mode, model_num, path_to_data, path_to_unique, setup_mode='load'):
+def model(path_to_model, mode, opt_params, normalize=True, path_to_data="../../ArrayData/data", path_to_unique="../../UniqueYs/unique", setup_mode='load'):
     data, y = setup(path_to_data, path_to_unique, mode=setup_mode)
-    H, W, _ = data[0][0].shape
-    data = reformulateData(data)
+    C, H, W = data[0][0].shape
+    data = normalizeData(data) if (normalize) else data
     data_train, data_val, data_test = splitData(data)
 
     num_classes = len(y)
 
-    model_to_use = eyeModel(model_num, H, W, num_classes) if (mode == 'train') else loadData(path_to_model)
+    model_to_use = eyeModel(H, W, num_classes) if (mode == 'train') else loadData(path_to_model)
 
     if (mode == 'train'):
-        train(model_to_use, data_train, data_val, path_to_model)
+        train(model_to_use, data_train, data_val, path_to_model, opt_params)
     elif (mode == 'test'):
         checkAccuracy(model_to_use, data_test)
+
+def testHyperParameters(mode, normalize):
+    types = ['adam', 'rmsprop', 'sgd']
+
+    lr = 1e-3
+    alpha = 0.9
+    betas = (0.5, 0.999)
+    momentum = 0.9
+
+    for type in types:
+        if (type == 'adam'):
+            print("=====Testing Adam=====")
+            path_to_model = "../../Model/model_adam_" + str(normalize) + "_" + str(lr) + "_" + str(betas[0]) + "_" + str(betas[1])
+            opt_params = (type, lr, alpha, betas, momentum)
+            model(path_to_model, mode, opt_params, normalize=normalize)
+        elif (type == 'rmsprop'):
+            print("=====Testing RMSprop=====")
+            path_to_model = "../../Model/model_rmsprop_" + str(normalize) + "_" + str(lr) + "_" + str(alpha) + "_" + str(0.9)
+            opt_params = (type, lr, alpha, betas, momentum)
+            model(path_to_model, mode, opt_params, normalize=normalize)
+        elif (type == 'sgd'):
+            print("=====Testing SGD=====")
+            path_to_model = "../../Model/model_sgd_" + str(normalize) + "_" + str(lr) + "_" + str(0.9)
+            opt_params = (type, lr, alpha, betas, momentum)
+            model(path_to_model, mode, opt_params, normalize=normalize)

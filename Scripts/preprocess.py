@@ -233,11 +233,10 @@ input:
     mode: states whether we will be loading data or creating data
         'load': states we will be loading data
         'save': states we will be creating and saving the data
-    threshold: the threshold value that determines how many unique values we use
 output:
     unique_ys: the M most unique values of the data we have based on threshold
 """
-def createUniqueYs(path_to_unique, path_to_ys=None, path_to_dist=None, mode='load', threshold=1):
+def createUniqueYs(path_to_unique, path_to_ys="../../Ys/ys", path_to_dist="../../Dists/dists", mode='load'):
     unique_ys = None
 
     if (mode == 'load'):
@@ -252,18 +251,20 @@ def createUniqueYs(path_to_unique, path_to_ys=None, path_to_dist=None, mode='loa
 
         unique_y_indices = np.argsort(yDist)[::-1]
 
-        M = 1
+        # M = 1
+        #
+        # for n in range(1, N, 1):
+        #     y1 = yDist[unique_y_indices[n-1]]
+        #     y2 = yDist[unique_y_indices[n]]
+        #
+        #     compVal = y1 if (y2 == 0) else y1 / y2
+        #
+        #     if (compVal < threshold):
+        #         break
+        #
+        #     M += 1
 
-        for n in range(1, N, 1):
-            y1 = yDist[unique_y_indices[n-1]]
-            y2 = yDist[unique_y_indices[n]]
-
-            compVal = y1 if (y2 == 0) else y1 / y2
-
-            if (compVal < threshold):
-                break
-
-            M += 1
+        M = int(N * 0.005) # 0.005 is a constant value we determined
 
         unique_y_indices = unique_y_indices[:M]
         unique_ys = y[unique_y_indices]
@@ -321,6 +322,20 @@ def splitData(data):
 
     return data_train, data_val, data_test
 
+def normalizeData(data):
+    N = data.shape[0]
+    C, H, W = data[0][0].shape
+
+    newData = np.copy(data)
+
+    for n in range(N):
+        mean_img = np.mean(data[n][0], axis=(1, 2))
+        std_img = np.std(data[n][0], axis=(1, 2))
+        std_img = np.where(std_img == 0, 1, std_img)
+        newData[n][0] = (data[n][0] - mean_img[:, None, None]) / std_img[:, None, None]
+
+    return newData
+
 """
 Function: setup
 ===============
@@ -356,6 +371,7 @@ def setup(path_to_save, path_to_unique, path_to_data="../SynthEyes_data", data_t
             for data in files:
                 if (data.endswith('.png')):
                     x = cv2.imread(path + '/' + data, cv2.IMREAD_COLOR)
+                    x = np.transpose(x, axes=(2, 0, 1))
                     y = getData(path + '/' + data[:-3] + 'pkl', data_to_retrieve)
                     y = findClosestData(unique_ys, y)
                     list_data.append((x, y))
@@ -367,21 +383,3 @@ def setup(path_to_save, path_to_unique, path_to_data="../SynthEyes_data", data_t
         print("Incorrect mode type")
 
     return array_data, unique_ys
-
-"""
-Function: reformulateData
-=========================
-Transposes array object in data to be of shape CxHxW instead of HxWxC.
-=========================
-input:
-    data: data whose array object is to be transposed
-output:
-    newData: data whose array object is transposed
-"""
-def reformulateData(data):
-    N = data.shape[0]
-    newData = np.copy(data)
-    for n in range(N):
-        newData[n][0] = np.transpose(data[n][0], axes=(2, 0, 1))
-
-    return newData
