@@ -366,6 +366,7 @@ def setup(path_to_save, path_to_unique, path_to_data="../SynthEyes_data", data_t
         unique_ys = loadData(path_to_unique)
 
         list_data = []
+        actual_ys = []
 
         for path, subdirs, files in os.walk(path_to_data):
             for data in files:
@@ -373,12 +374,15 @@ def setup(path_to_save, path_to_unique, path_to_data="../SynthEyes_data", data_t
                     x = cv2.imread(path + '/' + data, cv2.IMREAD_COLOR)
                     x = np.transpose(x, axes=(2, 0, 1))
                     y = getData(path + '/' + data[:-3] + 'pkl', data_to_retrieve)
+                    actual_ys.append(y)
                     y = findClosestData(unique_ys, y)
                     list_data.append((x, y))
 
         array_data = np.asarray(list_data)
+        actual_ys = np.asarray(actual_ys)
 
         saveData(array_data, path_to_save)
+        saveData(actual_ys, "../../ActualYs/actual_ys_test")
     else:
         print("Incorrect mode type")
 

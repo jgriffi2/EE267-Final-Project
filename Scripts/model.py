@@ -82,13 +82,10 @@ def eyeModel(H, W, num_classes):
     """
 
     m = nn.Sequential(
-        nn.Conv2d(3, 32, 3, stride=1, padding=1),
-        nn.Conv2d(32, 32, 3, stride=1, padding=1),
-        nn.Conv2d(32, 32, 3, stride=1, padding=1),
+        nn.Conv2d(3, 32, 7, stride=1, padding=3),
         nn.ReLU(),
         nn.MaxPool2d(2),
-        nn.Conv2d(32, 32, 3, stride=1, padding=1),
-        nn.Conv2d(32, 32, 3, stride=1, padding=1),
+        nn.Conv2d(32, 32, 5, stride=1, padding=2),
         nn.ReLU(),
         nn.MaxPool2d(2),
         nn.Conv2d(32, 64, 3, stride=1, padding=1),
@@ -281,27 +278,25 @@ def model(path_to_model, mode, opt_params, normalize=True, path_to_data="../../A
     elif (mode == 'test'):
         checkAccuracy(model_to_use, data_test)
 
-def testHyperParameters(mode, normalize):
-    types = ['adam', 'rmsprop', 'sgd']
+def testHyperParameters(mode, normalize, type):
 
     lr = 1e-3
     alpha = 0.9
     betas = (0.5, 0.999)
     momentum = 0.9
 
-    for type in types:
-        if (type == 'adam'):
-            print("=====Testing Adam=====")
-            path_to_model = "../../Model/model_adam_" + str(normalize) + "_" + str(lr) + "_" + str(betas[0]) + "_" + str(betas[1])
-            opt_params = (type, lr, alpha, betas, momentum)
-            model(path_to_model, mode, opt_params, normalize=normalize)
-        elif (type == 'rmsprop'):
-            print("=====Testing RMSprop=====")
-            path_to_model = "../../Model/model_rmsprop_" + str(normalize) + "_" + str(lr) + "_" + str(alpha) + "_" + str(0.9)
-            opt_params = (type, lr, alpha, betas, momentum)
-            model(path_to_model, mode, opt_params, normalize=normalize)
-        elif (type == 'sgd'):
-            print("=====Testing SGD=====")
-            path_to_model = "../../Model/model_sgd_" + str(normalize) + "_" + str(lr) + "_" + str(0.9)
-            opt_params = (type, lr, alpha, betas, momentum)
-            model(path_to_model, mode, opt_params, normalize=normalize)
+    if (type == 'adam'):
+        print("=====Testing Adam=====")
+        path_to_model = "../../Model/model_adam_" + str(normalize) + "_" + str(lr) + "_" + str(betas[0]) + "_" + str(betas[1])
+        opt_params = (type, lr, alpha, betas, momentum)
+        model(path_to_model, mode, opt_params, normalize=normalize)
+    elif (type == 'rmsprop'):
+        print("=====Testing RMSprop=====")
+        path_to_model = "../../Model/model_rmsprop_" + str(normalize) + "_" + str(lr) + "_" + str(alpha) + "_" + str(0.9)
+        opt_params = (type, lr, alpha, betas, momentum)
+        model(path_to_model, mode, opt_params, normalize=normalize)
+    elif (type == 'sgd'):
+        print("=====Testing SGD=====")
+        path_to_model = "../../Model/model_sgd_" + str(normalize) + "_" + str(lr) + "_" + str(0.9)
+        opt_params = (type, lr, alpha, betas, momentum)
+        model(path_to_model, mode, opt_params, normalize=normalize)
