@@ -3,6 +3,9 @@ Final Project for EE267, Virtual Reality.
 
 Project is on creating an eye tracking algorithm using CNNs.
 
+
+
+
 Saved data is too large for github, so you will have to save the data yourself
 and train the models yourself. Don't worry, it's pretty easy. If you have access
 to our Google Drive though, you will not need to worry about it as you will have
@@ -13,10 +16,20 @@ Make sure you are in the Scripts folder when running the code below.
 Before starting, make sure you have python installed on your computer, as well
 as these following packages in python:
 
+
+
+
   pickle, os, numpy, operator, cv2, scipy, torch, torchvision, random, matplotlib
+
+
+
+
 
 Once you have installed all of the packages, type python into the terminal and
 follow what's below.
+
+
+
 
 If you do not have access to Google Drive, run the following in order:
 
@@ -28,6 +41,7 @@ If you do not have access to Google Drive, run the following in order:
 
 
 
+
   preprocess.gatherData()
 
   preprocess.saveDistance()
@@ -35,6 +49,7 @@ If you do not have access to Google Drive, run the following in order:
   preprocess.createUniqueYs(mode='save')
 
   preprocess.setup(mode='save')
+
 
 
 
@@ -52,6 +67,7 @@ If you do not have access to Google Drive, run the following in order:
 
 
 
+
   model.testHyperParameters('test', False, 'adam')
 
   model.testHyperParameters('test', False, 'rmsprop')
@@ -63,6 +79,7 @@ If you do not have access to Google Drive, run the following in order:
   model.testHyperParameters('test', True, 'rmsprop')
 
   model.testHyperParameters('test', True, 'sgd')
+
 
 
 
@@ -80,11 +97,13 @@ If you do not have access to Google Drive, run the following in order:
 
 
 
+
 If you do have access to GoogleDrive, run the following:
 
   import model
 
   import interp
+
 
 
 
@@ -102,6 +121,7 @@ If you do have access to GoogleDrive, run the following:
 
 
 
+
   interp.interp("../Models/model_adam_False_0.001_0.9_(0.5, 0.999)_0.9")
 
   interp.interp("../Models/model_rmsprop_False_0.001_0.9_(0.5, 0.999)_0.9")
@@ -111,5 +131,5 @@ If you do have access to GoogleDrive, run the following:
   interp.interp("../Models/model_adam_True_0.001_0.9_(0.5, 0.999)_0.9")
 
   interp.interp("../Models/model_rmsprop_True_0.001_0.9_(0.5, 0.999)_0.9")
-  
+
   interp.interp("../Models/model_sgd_True_0.001_0.9_(0.5, 0.999)_0.9")
