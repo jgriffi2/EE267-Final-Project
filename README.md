@@ -16,31 +16,16 @@ Make sure you are in the Scripts folder when running the code below.
 Before starting, make sure you have python installed on your computer, as well
 as these following packages in python:
 
-
-
-
   pickle, os, numpy, operator, cv2, scipy, torch, torchvision, random, matplotlib
-
-
-
-
 
 Once you have installed all of the packages, type python into the terminal and
 follow what's below.
 
-
-
-
 If you do not have access to Google Drive, run the following in order:
-
-   import preprocess
-
-   import model
-
-   import interp
-
-
-
+```python
+  import preprocess
+  import model
+  import interp
 
   preprocess.gatherData()
 
@@ -94,7 +79,7 @@ If you do not have access to Google Drive, run the following in order:
   interp.interp("../Models/model_rmsprop_True_0.001_0.9_(0.5, 0.999)_0.9")
 
   interp.interp("../Models/model_sgd_True_0.001_0.9_(0.5, 0.999)_0.9")
-
+```
 
 
 
