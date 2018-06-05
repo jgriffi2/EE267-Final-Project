@@ -25,21 +25,6 @@ class Flatten(nn.Module):
         return x.view(N, -1)
 
 """
-Class: Unflatten
-==============
-Unflattens a tensor of shape (N, C*H*W) to be of shape (N, C, H, W).
-==============
-"""
-class Unflatten(nn.Module):
-    def __init__(self, N=-1, C=128, H=7, W=7):
-        self.N = N
-        self.C = C
-        self.H = H
-        self.W = W
-    def forward(self, x):
-        return x.view(self.N, self.C, self.H, self.W)
-
-"""
 Function: initializeWeights
 ===========================
 Initializes the weights of the model using the xavier uniform method.
@@ -61,20 +46,20 @@ Constructs a model for eye tracking.
 input:
     H: height of imgs
     W: width of imgs
-    num_classes: number of classes to base scores off of
+    num_classes: number of classes
 output:
     m: model created
 """
 def eyeModel(H, W, num_classes):
     """
     Archtitectures:
-    Convolutional layer (filter size 7x7 | 24 filters)
+    Convolutional layer (filter size 7x7 | 32 filters)
     ReLU
     MaxPool (2x2)
-    Convolutional layer (filter size 5x5 | 24 filters)
+    Convolutional layer (filter size 5x5 | 32 filters)
     ReLU
     MaxPool (2x2)
-    Convolutional layer (filter size 3x3 | 24 filters)
+    Convolutional layer (filter size 3x3 | 64 filters)
     ReLU
     MaxPool (2x2)
     Flatten
@@ -92,7 +77,7 @@ def eyeModel(H, W, num_classes):
         nn.ReLU(),
         nn.MaxPool2d(2),
         Flatten(),
-        nn.Linear(64*H*W / 64, num_classes)
+        nn.Linear(H*W, num_classes)
     )
 
     m.apply(initializeWeights)
@@ -138,7 +123,7 @@ input:
     m: model whose accuracy we are checking
     data_val: validation set of the data
 output:
-    None
+    acc: accuracy of m on data_val
 """
 def checkAccuracy(m, data_val):
     num_correct = 0
@@ -149,12 +134,6 @@ def checkAccuracy(m, data_val):
 
     with torch.no_grad():
         for x, y in data_val:
-            # Convert x to correct data structure
-            C, H, W = x.shape
-            x = torch.tensor(x.reshape(1, C, H, W))
-            x = x.to(dtype=torch.float32)
-            y = torch.tensor([y], dtype=torch.long)
-
             # Get scores
             scores = m(x)
 
@@ -179,13 +158,19 @@ input:
     m: model to be trained
     data_train: training set of the data
     data_val: validation set of the data
+    opt_params: parameters for getOptimizer
+        (type, lr, alpha, betas, momentum)
+    model_name: name of the model running
     path_to_model: directory where the model will be saved
+    path_to_loss: directory to save loss figure
+    path_to_acc: directory to save accuracy figure
     num_epochs: number of epochs to run
     show_every: number to print statistics every show_every iteration
 output:
     None
 """
-def train(m, data_train, data_val, path_to_model, opt_params, num_epochs=10, show_every=500):
+def train(m, data_train, data_val, opt_params, model_name, path_to_model="../Models/",
+          path_to_loss="../Plots/Loss/", path_to_acc="../Plots/Accuracy/", num_epochs=10, show_every=500):
     print("=====Training=====")
 
     iter_count = 0
@@ -198,12 +183,6 @@ def train(m, data_train, data_val, path_to_model, opt_params, num_epochs=10, sho
 
     for epoch in range(num_epochs):
         for c, (x, y) in enumerate(data_train):
-            # Convert x to correct data structure
-            C, H, W = x.shape
-            x = torch.tensor(x.reshape(1, C, H, W))
-            x = x.to(dtype=torch.float32)
-            y = torch.tensor([y], dtype=torch.long)
-
             # Put model into training mode
             m.train()
 
@@ -237,13 +216,39 @@ def train(m, data_train, data_val, path_to_model, opt_params, num_epochs=10, sho
         acc_val[epoch] = checkAccuracy(m, data_val)
 
     # Save model
-    saveData(m, path_to_model)
+    saveData(m, path_to_model + model_name)
 
     # Plot the loss
-    plotLoss(loss_array, "../../Plots/" + path_to_model[12:] + ".png")
+    plotLoss(loss_array, path_to_loss + model_name + ".png")
 
     # Plot the accuracy
-    plotAccuracy(acc_train, acc_val, "../../Plots/" + path_to_model[12:] + "_accuracies.png")
+    plotAccuracy(acc_train, acc_val, path_to_acc + model_name + ".png")
+
+"""
+Function: reformData
+====================
+Converts the tuple of numpy arrays to tuple of tensors.
+====================
+input:
+    data: tuple of numpy arrays
+output:
+    newData: tuple of tensors
+"""
+def reformData(data):
+    N = data.shape[0]
+    C, H, W = data[0][0].shape
+
+    newData = np.zeros((N, 2), dtype=tuple)
+
+    for c, (x, y) in enumerate(data):
+        # Convert x and y to correct data structure
+        x = torch.tensor(x.reshape(1, C, H, W))
+        x = x.to(dtype=torch.float32)
+        y = torch.tensor([y], dtype=torch.long)
+
+        newData[c] = (x, y)
+
+    return newData
 
 """
 Function: model
@@ -251,52 +256,64 @@ Function: model
 Trains or tests a model defined by mode and model_num.
 ===============
 input:
-    path_to_model: path where model is located or where it will be saved
     mode: mode to determine if we train or test
         'train': states we will be training
         'test': states we will be testing
-    path_to_data: path to where the array data is located
-    path_to_unique: path to where the unique_y data is located
+    path_to_model: path where model is located or where it will be saved
+    opt_params: parameters for getOptimizer
+        (type, lr, alpha, betas, momentum)
+    normalize: determines whether to normalize data
+    path_to_samples: path to where the array data is located
+    path_to_uniques: path to where the unique_y data is located
     setup_mode: mode to use for setup function
         'load': states we will be loading data
         'save': states we will be creating and saving the data
 output:
     None
 """
-def model(path_to_model, mode, opt_params, normalize=True, path_to_data="../../ArrayData/data", path_to_unique="../../UniqueYs/unique", setup_mode='load'):
-    data, y = setup(path_to_data, path_to_unique, mode=setup_mode)
+def model(mode, path_to_model="../Models", opt_params=('adam', 1e-3, 0.9, (0.5, 0.999), 0.9),
+          normalize=True, path_to_samples="../samples/samples", path_to_uniques="../Uniques/uniques",
+          setup_mode='load'):
+    data, y = setup(path_to_samples, path_to_unique, mode=setup_mode)
     C, H, W = data[0][0].shape
+
     data = normalizeData(data) if (normalize) else data
+
     data_train, data_val, data_test = splitData(data)
+    data_train, data_val, data_test = reformData(data_train), reformData(data_val), reformData(data_test)
 
     num_classes = len(y)
+
+    type, lr, alpha, betas, momentum = opt_params
+    model_name = "model_" + type + "_" + str(normalize) + "_" + str(lr) + "_" + str(alpha) + "_" + str(betas) + "_" + str(momentum)
 
     model_to_use = eyeModel(H, W, num_classes) if (mode == 'train') else loadData(path_to_model)
 
     if (mode == 'train'):
-        train(model_to_use, data_train, data_val, path_to_model, opt_params)
+        train(model_to_use, data_train, data_val, opt_params, model_name)
     elif (mode == 'test'):
         checkAccuracy(model_to_use, data_test)
 
+"""
+Function: testHyperParameters
+=============================
+Tests the hyper parameters of normalization and type of optimizer with standard
+learning rate, alpha, betas, and momentum.
+=============================
+input:
+    mode: mode to determine if we train or test
+        'train': states we will be training
+        'test': states we will be testing
+    normalize: determines whether to normalize data
+    type: type of optimizer
+        'adam', 'rmsprop', 'sgd'
+output:
+    None
+"""
 def testHyperParameters(mode, normalize, type):
+    lr, alpha, betas, momentum = 1e-3, 0.9, (0.5, 0.999), 0.9
+    opt_params = (type, lr, alpha, betas, momentum)
 
-    lr = 1e-3
-    alpha = 0.9
-    betas = (0.5, 0.999)
-    momentum = 0.9
+    print("=====%s=====" % type)
 
-    if (type == 'adam'):
-        print("=====Testing Adam=====")
-        path_to_model = "../../Model/model_adam_" + str(normalize) + "_" + str(lr) + "_" + str(betas[0]) + "_" + str(betas[1])
-        opt_params = (type, lr, alpha, betas, momentum)
-        model(path_to_model, mode, opt_params, normalize=normalize)
-    elif (type == 'rmsprop'):
-        print("=====Testing RMSprop=====")
-        path_to_model = "../../Model/model_rmsprop_" + str(normalize) + "_" + str(lr) + "_" + str(alpha) + "_" + str(0.9)
-        opt_params = (type, lr, alpha, betas, momentum)
-        model(path_to_model, mode, opt_params, normalize=normalize)
-    elif (type == 'sgd'):
-        print("=====Testing SGD=====")
-        path_to_model = "../../Model/model_sgd_" + str(normalize) + "_" + str(lr) + "_" + str(0.9)
-        opt_params = (type, lr, alpha, betas, momentum)
-        model(path_to_model, mode, opt_params, normalize=normalize)
+    model(mode, opt_params=opt_params, normalize=normalize)
