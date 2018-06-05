@@ -13,7 +13,7 @@ Make sure you are in the Scripts folder when running the code below.
 Before starting, make sure you have python installed on your computer, as well
 as these following packages in python:
 
-  pickle, os, numpy, operator, cv2, scipy, torch, torchvision, random, matplotlib
+    pickle, os, numpy, operator, cv2, scipy, torch, torchvision, random, matplotlib
 
 Once you have installed all of the packages, type python into the terminal and
 follow what's below.
