@@ -271,10 +271,10 @@ input:
 output:
     None
 """
-def model(mode, path_to_model="../Models", opt_params=('adam', 1e-3, 0.9, (0.5, 0.999), 0.9),
+def model(mode, path_to_model="../Models/", opt_params=('adam', 1e-3, 0.9, (0.5, 0.999), 0.9),
           normalize=True, path_to_samples="../samples/samples", path_to_uniques="../Uniques/uniques",
           setup_mode='load'):
-    data, y = setup(path_to_samples, path_to_unique, mode=setup_mode)
+    data, y = setup(path_to_samples, path_to_uniques, mode=setup_mode)
     C, H, W = data[0][0].shape
 
     data = normalizeData(data) if (normalize) else data
@@ -287,7 +287,7 @@ def model(mode, path_to_model="../Models", opt_params=('adam', 1e-3, 0.9, (0.5, 
     type, lr, alpha, betas, momentum = opt_params
     model_name = "model_" + type + "_" + str(normalize) + "_" + str(lr) + "_" + str(alpha) + "_" + str(betas) + "_" + str(momentum)
 
-    model_to_use = eyeModel(H, W, num_classes) if (mode == 'train') else loadData(path_to_model)
+    model_to_use = eyeModel(H, W, num_classes) if (mode == 'train') else loadData(path_to_model + model_name)
 
     if (mode == 'train'):
         train(model_to_use, data_train, data_val, opt_params, model_name)
