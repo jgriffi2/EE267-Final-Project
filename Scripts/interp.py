@@ -22,10 +22,7 @@ def interpScores(scores, y):
 
     # Make look_vec a unit vector
     scores_to_sum = normScores[:, None] * y
-    # norms = np.linalg.norm(scores_to_sum, axis=1)
-    # norms = np.where(norms == 0, 1, norms)
-    # scores_to_sum = scores_to_sum / norms[:, None]
-    summed_scores = np.mean(scores_to_sum, axis=0)
+    summed_scores = np.sum(scores_to_sum, axis=0)
     norm = np.linalg.norm(summed_scores)
     norm = 1 if (norm == 0) else norm
     interp_scores = summed_scores / norm
