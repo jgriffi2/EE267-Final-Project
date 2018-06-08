@@ -18,13 +18,13 @@ def interpScores(scores, y):
 
     # All values in normScores are in range [0, 1)
     max_scores = reshapeScores - np.max(reshapeScores)
-    normScores = np.exp(max_scores) / np.max(np.exp(max_scores))
+    normScores = np.exp(max_scores) / np.sum(np.exp(max_scores))
 
     # Make look_vec a unit vector
     scores_to_sum = normScores[:, None] * y
-    norms = np.linalg.norm(scores_to_sum, axis=1)
-    norms = np.where(norms == 0, 1, norms)
-    scores_to_sum = scores_to_sum / norms[:, None]
+    # norms = np.linalg.norm(scores_to_sum, axis=1)
+    # norms = np.where(norms == 0, 1, norms)
+    # scores_to_sum = scores_to_sum / norms[:, None]
     summed_scores = np.mean(scores_to_sum, axis=0)
     norm = np.linalg.norm(summed_scores)
     norm = 1 if (norm == 0) else norm
